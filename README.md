@@ -16,7 +16,7 @@ you should have imagemagick installed on your machine
 - the named collections you'll use in the csv column should be first created 
 - the named item_types you'll use in the csv column should first be created
 
-### The relation creation part:
+## The relation creation part:
 
 
 
