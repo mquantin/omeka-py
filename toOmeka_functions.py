@@ -143,7 +143,7 @@ class omeka_item:
                         self.log.append(str('COLLECTION ' + case + ' NOT RECOGNIZED'))
                 else:
                     try:
-                        self.collection['id'] = collections_byname[case.lower()] #dict collection_name: collection_id
+                        self.collection['id'] = collections_byname[case.lower().decode('utf8')] #dict collection_name: collection_id
                     except:
                         self.log.append(str('COLLECTION ' + case + ' NOT RECOGNIZED'))
             elif col_2DC[i] == 'item_type':
@@ -154,7 +154,7 @@ class omeka_item:
                         self.log.append(str('ITEM_TYPE ' + case + ' NOT RECOGNIZED'))
                 else:
                     try:
-                        self.item_type['id'] = item_type_byname[case.lower()] #dict item_type_name: item_type_id
+                        self.item_type['id'] = item_type_byname[case.lower().decode('utf8')] #dict item_type_name: item_type_id
                     except:
                         self.log.append(str('ITEM_TYPE ' + case + ' NOT RECOGNIZED'))
             elif col_2DC[i] == 'tag':
