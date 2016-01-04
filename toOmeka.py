@@ -38,13 +38,11 @@ client = OmekaClient(APIurl.encode('ascii'), APIkey)
 
 
 
-sql = (sqluser, sqlpsw)
 with open(to_omeka_csv_file, 'r')  as csvfile:
     with open(logfilepath, 'w') as logfileobj:
         csv_data = csv.reader(csvfile, delimiter=',', quotechar='"')
         header = csv_data.next()
         column2DC = toOmeka_functions.build_mapping_column2DC(DCfields_prefix, client, header)
-        tags = toOmeka_functions.get_tags_byname(client, *sql)
         item_types = None
         collections = None
         if item_type_byname:
@@ -64,7 +62,7 @@ with open(to_omeka_csv_file, 'r')  as csvfile:
             if item.files:
                 item.upload_files(full_path_to_picts, max_pict_size, client)
             if item.tags:
-                tags = item.upload_tags(client, tags, *sql)
+                item.upload_tags(client)
             if item.log:
                 item.write_log(logfileobj)
                 print 'check log for item n°', item.id

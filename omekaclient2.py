@@ -60,7 +60,7 @@ class OmekaClient:
         resp, content = self._http.request(url, method, body=data, headers=headers)
         return resp, content
 
-    def get_tags(self, sql_user, sql_psw):
+    def get_alltags(self, sql_user, sql_psw):
         '''get a set of dict{tag_id, tag_name} given sql login data'''
         tags = []
         tag = {}
@@ -76,24 +76,3 @@ class OmekaClient:
             tag['name'] = item[1]
             tags.append(tag.copy())
         return tags
-
-    def post_tag(self, sql_user, sql_psw, tag_name):
-        cnx = mysql.connector.connect(user= sql_user, password=sql_psw,
-                                      host='127.0.0.1',
-                                      database='omeka')
-        cursor = cnx.cursor()
-        #####
-        query = """INSERT INTO omeka_tags (name) VALUES (\"{}\");""".format(tag_name)
-        try:
-            cursor.execute(query)
-            cnx.commit()
-            resp, content = self.get("tags", cursor.lastrowid)
-        except mysql.connector.errors.IntegrityError:
-            cnx.rollback()
-            query = """SELECT * FROM omeka_tags WHERE name = \"{}\";""".format(tag_name)
-            cursor.execute(query)
-            for item in cursor:
-                resp, content = self.get("tags", item[0])
-        cursor.close()
-        cnx.close()
-        return resp, content

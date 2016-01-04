@@ -66,9 +66,9 @@ def get_collections_byname(client):
     return collections_dict
 
 
-def get_tags_byname(client, sql_user, sql_psw):
+def get_alltags_byname(client, sql_user, sql_psw):
     tags_byname = {}
-    tags = client.get_tags(sql_user, sql_psw)
+    tags = client.get_alltags(sql_user, sql_psw)
     for tag in tags:
         tags_byname[tag['name']] = tag['id']
     return tags_byname
@@ -208,20 +208,17 @@ class omeka_item:
                     fichier = reduce_pict_weight(fichier, max_pict_size)
                 uploadfile = open(fichier, "r").read()
                 response, content = client.post_file(uploadmeta, fichier, uploadfile)
+                if re.search(r'message', response):
+                    self.log.append(str('FILE '+ str(fichier) + ' Has a problem' + content))
             else:
                 self.log.append(str('FILE '+ str(fichier) + ' HAS INCORRECT NAME, NOT MATCHING ANY EXISTING FILE IN FOLDER'))
 
-    def upload_tags(self, client, alltags_byname, sqluser, sqlpsw):
+    def upload_tags(self, client):
         tags_found = []
         for tag in self.tags:
-            if tag in alltags_byname:
-                tag_id = alltags_byname[tag]
-                resp, content = client.get('tags', tag_id)
-            else:
-                resp, content = client.post_tag(sqluser, sqlpsw, tag)
-            newtag = json.loads(content, encoding='utf8', cls=None, object_hook=None, parse_float=None, parse_int=None, parse_constant=None, object_pairs_hook=None)
-            tags_found.append(newtag)
-            alltags_byname[newtag['name']] = newtag['id']
-        jsonstr = json.dumps({'tags': tags_found})
-        response, content = client.put("items", self.id, jsonstr)
-        return alltags_byname
+            tags_found.append({'name':tag})
+        if tags_found:
+            jsonstr = json.dumps({'tags': tags_found})
+            response, content = client.put("items", iditem, jsonstr)
+            if re.search(r'message', response):
+                self.log.append(str('TAGS '+ str(tags) + ' Has a problem' + content))
