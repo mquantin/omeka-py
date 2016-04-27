@@ -1,15 +1,16 @@
 {
-    "APIurl": "http://localhost/omeka/api",
-    "APIkey": "0dab47c9********************826",
-    "sqluser": "omeka",
-    "sqlpsw": "root",
-    "to_omeka_csv_file": "/home/****************/template.csv", 
+    "APIurl": "xxx/api",
+    "APIkey": "xxx",
+    "sqluser": null,
+    "sqlpsw": null,
+    "to_omeka_csv_file": "/home/xxx/OMEKA_collect.csv",
     "csvdelimiter": ",",
     "csvquotechar": "\"",
-    "max_pict_size": 1980,
+    "max_pict_size": 950,
     "DCfields_prefix": "dublin core",
-    "full_path_to_picts": "",
-    "create_collec": false,
+    "full_path_to_picts": "/home/xxx/files/",
     "item_type_byname": true,
-    "collection_by_name": true
+    "collection_by_name": true,
+    "date_format": "%m/%d/%Y",
+    "force_same_name_item": false
 }

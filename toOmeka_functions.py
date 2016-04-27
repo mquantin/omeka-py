@@ -4,6 +4,7 @@ import json
 import re
 import os
 import datetime
+import logging
 
 def build_mapping_column2DC(DCfields_prefix, client, header):
     # A dictionary of all the element ids in the Omeka database
@@ -65,6 +66,16 @@ def get_collections_byname(client):
                 break
     return collections_dict
 
+def get_allitems_names(client):
+    response, content = client.get('items')
+    items = json.loads(content, encoding='utf8', cls=None, object_hook=None, parse_float=None, parse_int=None, parse_constant=None, object_pairs_hook=None)
+    items_names = set([element_text["text"] for item in items for element_text in item["element_texts"] if element_text["element"]["id"] == 50])
+    # items_names = set()
+    # for item in items:
+    #     for element_text in item["element_texts"]:
+    #         if element_text["element"]["id"] == 50:
+    #             items_names.add(element_text["text"])
+    return items_names
 
 def get_alltags_byname(client, sql_user, sql_psw):
     tags_byname = {}
@@ -73,7 +84,35 @@ def get_alltags_byname(client, sql_user, sql_psw):
         tags_byname[tag['name']] = tag['id']
     return tags_byname
 
+def start_log():
+    logfilepath = 'omekapy.log'
+    if os.path.isfile(logfilepath):
+        os.remove(logfilepath)
+    logging.basicConfig(filename=logfilepath, format='%(levelname)s:%(message)s', level=logging.INFO)
+    logging.info('Started at' + str(datetime.datetime.now()))
 
+def checkfileexists(full_path_to_picts, allitems):
+    prob = set()
+    for item in allitems:
+        for filename in item.files:
+            filepath = os.path.join(full_path_to_picts.decode('utf8'), filename.decode('utf8')).encode('utf8')
+            if not os.path.isfile(filepath):
+                prob.add(str('FILE '+ str(filename) + ' HAS INCORRECT NAME, NOT MATCHING ANY EXISTING FILE IN FOLDER'))
+    return prob
+
+def askuser(allproblems):
+    if allproblems:
+        print('theses problems have been detected')
+        for problem in allproblems:
+            print(problem)
+    else:#no problems have been detected
+        print('no problems have been detected')
+    while True:
+        print('do you want to continue (upload the data)? (y/n)')
+        upload = raw_input()
+        if upload in ['y', 'n']:
+            break
+    return upload
 
 class omeka_item:
     def __init__ (self):
@@ -82,21 +121,12 @@ class omeka_item:
         self.featured = False
         self.tags = []
         self.element_texts = []
-        self.collection = {}
-        self.item_type = {}
+        self.collection = None#integer if found
+        self.item_type = None#integer if found
         self.tags = []
         self.files = []
-        self.log = []
 
-    def write_log(self, logfileobj):
-        logfileobj.write("\n###########################\n")
-        logfileobj.write('item number')
-        logfileobj.write(str(self.id))
-        logfileobj.write('\n')
-        for item in self.log:
-            logfileobj.write(item)
-            logfileobj.write('\n')
-        logfileobj.write("###########################\n")
+
 
     def check_true(self, case):
         if re.match(r'true|vrai|oui|yes(?iu)', case):
@@ -113,16 +143,22 @@ class omeka_item:
         s = s.strip()
         return s
 
-    def get_data_from_row(self, row, col_2DC, item_type_byname, collections_byname):
+    def get_data_from_row(self, row, col_2DC, item_type_byname, collections_byname, items_names, date_format):
+        problems = set()
         for i, case in enumerate(row):
             if type(col_2DC[i]) == int:# means it is a DC field
+                if col_2DC[i] == 50 and items_names:#means it is the title and we don't want 2 items with the same name
+                    if self.clean_text_imput(case.decode('utf8')) in items_names:
+                        logging.info(str('SKIPPING ' + case + ' ALLREADY EXISTS IN DB'))
+                        problems.add(str('SKIPPING ' + case + ' ALLREADY EXISTS IN DB'))
+                        return problems
                 element_text = {"html": False, "text": "none", "element_set": {"id": 1}}
                 if re.search(r'<[^/]*/>', case):
                     element_text['html'] = True
                 element_text['element'] = {"id":col_2DC[i]}
                 if col_2DC[i] == 40:#trying to isoformat the date yyyy/mm/dd
                     if re.match(r'\d\d?/\d\d/\d\d\d\d', case):
-                        case = datetime.datetime.strptime(case, '%d/%m/%Y').date().isoformat()
+                        case = datetime.datetime.strptime(case, date_format).date().isoformat()
                     if re.match(r'\d\d/\d\d\d\d', case):
                         case = datetime.datetime.strptime(case, '%m/%Y').date().isoformat()
                 element_text['text'] = self.clean_text_imput(case)
@@ -138,32 +174,37 @@ class omeka_item:
             elif col_2DC[i] == 'collection':
                 if not collections_byname:
                     try:
-                        self.collection['id'] = int(case)
+                        self.collection = int(case)
                     except:
-                        self.log.append(str('COLLECTION ' + case + ' NOT RECOGNIZED'))
+                        logging.info(str('COLLECTION ' + case + ' NOT RECOGNIZED'))
+                        problems.add(str('COLLECTION ' + case + ' NOT RECOGNIZED'))
                 else:
                     try:
-                        self.collection['id'] = collections_byname[case.lower().decode('utf8')] #dict collection_name: collection_id
+                        self.collection = collections_byname[case.lower().decode('utf8')] #dict collection_name: collection_id
                     except:
-                        self.log.append(str('COLLECTION ' + case + ' NOT RECOGNIZED'))
+                        logging.info(str('COLLECTION ' + case + ' NOT RECOGNIZED'))
+                        problems.add(str('COLLECTION ' + case + ' NOT RECOGNIZED'))
             elif col_2DC[i] == 'item_type':
                 if not item_type_byname:
                     try:
-                        self.item_type['id'] = int(case)
+                        self.item_type = int(case)
                     except:
-                        self.log.append(str('ITEM_TYPE ' + case + ' NOT RECOGNIZED'))
+                        logging.info(str('ITEM_TYPE ' + case + ' NOT RECOGNIZED'))
+                        problems.add(str('ITEM_TYPE ' + case + ' NOT RECOGNIZED'))
                 else:
                     try:
-                        self.item_type['id'] = item_type_byname[case.lower().decode('utf8')] #dict item_type_name: item_type_id
+                        self.item_type = item_type_byname[case.lower().decode('utf8')] #dict item_type_name: item_type_id
                     except:
-                        self.log.append(str('ITEM_TYPE ' + case + ' NOT RECOGNIZED'))
+                        logging.info(str('ITEM_TYPE ' + case + ' NOT RECOGNIZED'))
+                        problems.add(str('ITEM_TYPE ' + case + ' NOT RECOGNIZED'))
             elif col_2DC[i] == 'tag':
                 self.tags = [self.clean_text_imput(tag) for tag in re.split(r'[,;]',case) if re.search(r'\w', tag)]
             elif col_2DC[i] == 'file':
                 self.files = [self.clean_text_imput(fichier, False) for fichier in re.split(r'[,;]', case) if re.search(r'\w', fichier)]
+        return problems
 
     def upload_data(self, client):
-        item_dict = {"collection": self.collection, "item_type": self.item_type, "featured": self.featured, "public": self.public, 'element_texts': self.element_texts}
+        item_dict = {"collection": {"id":self.collection}, "item_type": {"id":self.item_type}, "featured": self.featured, "public": self.public, 'element_texts': self.element_texts}
         item_json = json.dumps(item_dict)
         # with open('jsonfichier.json', 'w') as itemfile:
         #     json.dump(item, itemfile, ensure_ascii=False, indent=4)
@@ -177,7 +218,7 @@ class omeka_item:
         # def shellquote(s):
         #     return "'" + s.replace("'", "'\\''") + "'"
         def reduce_pict_weight(fichier, max_pict_size, iteration=0):
-            self.log.append(str('reducing pict weight. iteration n'+ str(iteration)))
+            logging.info(str('reducing pict weight. iteration n'+ str(iteration)))
             path, extension = os.path.splitext(fichier)
             if iteration == 0:
                 # newpath = shellquote(path+'_mod.jpg')
@@ -202,16 +243,20 @@ class omeka_item:
         uploadmeta = json.dumps(uploadjson)
         for fichier in self.files:
             if not re.match(r'^\\', fichier) and not full_path_to_picts == '':
-                fichier = os.path.join(full_path_to_picts, fichier)
+                fichier = os.path.join(full_path_to_picts.decode('utf8'), fichier.decode('utf8')).encode('utf8')
             if os.path.isfile(fichier):
+                print('newfile')
+                print(os.path.getsize(fichier))
                 if os.path.getsize(fichier) > max_pict_size*1000:
                     fichier = reduce_pict_weight(fichier, max_pict_size)
+                    print(os.path.getsize(fichier))
                 uploadfile = open(fichier, "r").read()
                 response, content = client.post_file(uploadmeta, fichier, uploadfile)
-                if re.search(r'message', response):
-                    self.log.append(str('FILE '+ str(fichier) + ' Has a problem' + content))
+                if response['status'] not in ['200', '201', '202', 200, 201, 202]:#not an OK, Created or accepted
+                    logging.info(str('FILE '+ str(fichier) + ' Has a problem:\n\t' + str(response) + '\n\t'+ str(content)))
+                    print(str('FILE '+ str(fichier) + ' Has a problem:\n\t' + str(response) + '\n\t'+ str(content)))
             else:
-                self.log.append(str('FILE '+ str(fichier) + ' HAS INCORRECT NAME, NOT MATCHING ANY EXISTING FILE IN FOLDER'))
+                logging.info(str('FILE '+ str(fichier) + ' HAS INCORRECT NAME, NOT MATCHING ANY EXISTING FILE IN FOLDER'))
 
     def upload_tags(self, client):
         tags_found = []
@@ -219,6 +264,6 @@ class omeka_item:
             tags_found.append({'name':tag})
         if tags_found:
             jsonstr = json.dumps({'tags': tags_found})
-            response, content = client.put("items", iditem, jsonstr)
-            if re.search(r'message', response):
-                self.log.append(str('TAGS '+ str(tags) + ' Has a problem' + content))
+            response, content = client.put("items", self.id, jsonstr)
+            if re.search(r'message', str(response)):
+                logging.info(str('TAGS '+ str(tags) + ' Has a problem' + content))
